@@ -8,7 +8,9 @@
 
 ## 使い方
 
-`index.html` をブラウザで開くだけです。インストールは不要です。
+**公開URL：https://sodari65-hue.github.io/world-cuisine/**（児童のiPadはこのURLを開くだけ）
+
+手元のPCでは、`index.html` をブラウザで開くだけでも動きます。インストールは不要です。
 
 - **iPad / 校務PC** … Chrome・Edge・Safari で動きます
 - **配布したいとき** … このフォルダごと Netlify Drop（https://app.netlify.com/drop）にドラッグすると
@@ -194,6 +196,12 @@ world-cuisine/
 ```
 
 **フォルダごと**持ち運んでください（index.html だけを移すと動きません）。
+
+### 公開と更新（GitHub Pages）
+
+- リポジトリ：https://github.com/sodari65-hue/world-cuisine （公開）
+- `main` ブランチに反映すると、1〜2分で公開URLに反映されます
+- コミットの記録者は GitHub の匿名用アドレス（`…@users.noreply.github.com`）にしてあります
 
 ### 外部から読みこむもの
 
