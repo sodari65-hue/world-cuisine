@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>世界の郷土料理と地球 | 地形から料理を読みとく</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8C%8F%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#070b14;
+  --panel:rgba(14,20,33,.86);
+  --panel-solid:#0e1421;
+  --line:rgba(255,255,255,.12);
+  --text:#eef2f8;
+  --dim:#9fb0c8;
+  --accent:#ffb03a;
+  --accent2:#5ad1c6;
+  --ok:#5ad17a;
+  --ng:#ff6b6b;
+  --radius:16px;
+  --shadow:0 18px 50px rgba(0,0,0,.55);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,-apple-system,"Segoe UI",sans-serif;
+  overflow:hidden;-webkit-text-size-adjust:100%;
+  overscroll-behavior:none;
+}
+button{font:inherit;color:inherit;cursor:pointer}
+#stage{position:fixed;inset:0}
+canvas#gl{display:block;width:100%;height:100%;touch-action:none}
+
+/* ---------- 共通パーツ ---------- */
+.glass{
+  background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.btn{
+  background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:999px;
+  padding:8px 14px;font-size:13px;font-weight:600;letter-spacing:.02em;
+  transition:background .15s,border-color .15s,transform .1s;
+}
+.btn:hover{background:rgba(255,255,255,.14)}
+.btn:active{transform:scale(.97)}
+.btn.on{background:var(--accent);border-color:var(--accent);color:#1b1206}
+.btn.ghost{background:transparent}
+
+/* ---------- ヘッダー ---------- */
+#topbar{
+  position:fixed;top:0;left:0;right:0;z-index:30;
+  display:flex;align-items:center;gap:12px;
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background:linear-gradient(180deg,rgba(7,11,20,.92),rgba(7,11,20,0));
+  pointer-events:none;
+}
+#topbar > *{pointer-events:auto}
+#brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+#brand h1{margin:0;font-size:17px;font-weight:800;letter-spacing:.03em;white-space:nowrap}
+#brand span{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#topActions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+/* ---------- 左サイドの列 ---------- */
+#leftRail{
+  position:fixed;left:14px;top:76px;bottom:14px;width:252px;z-index:25;
+  display:flex;flex-direction:column;gap:10px;pointer-events:none;
+}
+#leftRail > *{pointer-events:auto}
+
+/* ---------- 国リスト ---------- */
+#listPanel{
+  flex:0 1 auto;min-height:0;
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s;
+}
+#listPanel.hide{transform:translateX(-300px);opacity:0;pointer-events:none}
+#listHead{padding:10px 12px 8px;border-bottom:1px solid var(--line)}
+/* 国一覧 / 地形でくらべる の切りかえ */
+#modeTabs{display:flex;gap:4px;margin-bottom:8px;background:rgba(255,255,255,.05);padding:3px;border-radius:10px}
+#modeTabs button{
+  flex:1;background:none;border:0;border-radius:8px;padding:6px 4px;
+  font-size:11.5px;font-weight:800;color:var(--dim);letter-spacing:.02em;
+}
+#modeTabs button.on{background:var(--accent);color:#1b1206}
+/* 地形タグのチップ */
+#tagWrap{padding:7px 7px 3px;display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line)}
+.tagchip{
+  font-size:10px;font-weight:700;padding:3px 7px;border-radius:99px;line-height:1.5;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);
+}
+.tagchip.on{background:rgba(90,209,198,.22);border-color:rgba(90,209,198,.65);color:#bdf5ef}
+#tagDesc{font-size:10px;color:var(--dim);padding:5px 10px 0;line-height:1.55}
+/* 標高順のリスト */
+.d-row{
+  display:block;width:100%;text-align:left;background:none;border:0;color:inherit;
+  border-radius:9px;padding:6px 8px;
+}
+.d-row:hover{background:rgba(255,255,255,.08)}
+.d-row.sel{background:rgba(255,176,58,.18);box-shadow:inset 0 0 0 1px rgba(255,176,58,.5)}
+.d-row .t{display:flex;align-items:baseline;gap:6px}
+.d-row .nm{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.d-row .m{font-size:10px;color:var(--accent);font-weight:800;margin-left:auto;white-space:nowrap}
+.d-row .a{font-size:10px;color:var(--dim);display:block;margin:1px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.d-bar{height:4px;border-radius:99px;background:rgba(255,255,255,.09);overflow:hidden}
+.d-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#4e9a4a,#d8c47a,#b98b52,#fff)}
+#search{
+  width:100%;background:rgba(255,255,255,.07);border:1px solid var(--line);
+  border-radius:10px;padding:8px 10px;color:var(--text);font-size:13px;outline:none;
+}
+#search::placeholder{color:#6f809a}
+#listBody{overflow-y:auto;padding:6px;flex:1;-webkit-overflow-scrolling:touch}
+.region-h{
+  font-size:10.5px;color:var(--accent2);letter-spacing:.14em;font-weight:800;
+  padding:12px 8px 5px;
+}
+.c-item{
+  display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  background:none;border:0;border-radius:10px;padding:7px 8px;font-size:13.5px;color:inherit;
+}
+.c-item:hover{background:rgba(255,255,255,.08)}
+.c-item.sel{background:rgba(255,176,58,.18);box-shadow:inset 0 0 0 1px rgba(255,176,58,.5)}
+.c-item .flag{font-size:17px;line-height:1;width:22px;text-align:center;flex:none}
+.c-item .nm{font-weight:700}
+.c-item .dish{display:block;font-size:10.5px;color:var(--dim);font-weight:500;margin-top:1px}
+
+/* ---------- 下部コントロール ---------- */
+#controls{
+  flex:0 0 auto;margin-top:auto;padding:12px 14px;
+  transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s;
+}
+#controls.hide{transform:translateY(200px);opacity:0;pointer-events:none}
+#controls .row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+#controls .row:last-child{margin-bottom:0}
+.lbl{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.06em}
+#exagVal{font-size:11px;color:var(--accent);font-weight:800;margin-left:auto}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent2),var(--accent));outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:pointer;
+}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:#fff}
+.toggles{display:flex;gap:6px;flex-wrap:wrap}
+.tg{font-size:11px;padding:5px 9px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid var(--line);font-weight:700}
+.tg.on{background:rgba(90,209,198,.2);border-color:rgba(90,209,198,.6);color:#bdf5ef}
+
+/* ---------- 標高の凡例 ---------- */
+#legend{padding-top:10px;margin-top:9px;border-top:1px solid var(--line);display:none}
+#legend.show{display:block}
+#ramp{height:9px;border-radius:99px;margin:6px 0 4px;
+  background:linear-gradient(90deg,#1f6b3a 0%,#4e9a4a 3.5%,#9dbd5e 9.5%,#d8c47a 17.5%,
+    #b98b52 27.5%,#8d6a4f 41%,#b9aa9c 57%,#ffffff 74%,#ffffff 100%)}
+#rampLbl{display:flex;justify-content:space-between;font-size:9px;color:var(--dim)}
+
+/* ---------- ピン ---------- */
+#pins{position:fixed;inset:0;z-index:20;pointer-events:none}
+.pin{
+  position:absolute;transform:translate(-50%,-50%);pointer-events:auto;
+  display:flex;align-items:center;gap:6px;cursor:pointer;
+  transition:opacity .2s;white-space:nowrap;
+}
+.pin .dot{
+  width:11px;height:11px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 2px rgba(7,11,20,.8),0 0 12px rgba(255,176,58,.9);
+  flex:none;transition:transform .15s;
+}
+.pin .tag{
+  font-size:11px;font-weight:800;padding:2px 7px;border-radius:7px;
+  background:rgba(7,11,20,.78);border:1px solid var(--line);letter-spacing:.02em;
+}
+.pin:hover .dot{transform:scale(1.4)}
+.pin.sel .dot{background:#fff;box-shadow:0 0 0 3px var(--accent),0 0 18px var(--accent)}
+.pin.sel .tag{background:var(--accent);color:#1b1206;border-color:var(--accent)}
+.pin.behind{opacity:.1;pointer-events:none}
+.pin.nolabel .tag{display:none}
+.pin[hidden]{display:none}
+
+#hoverName{
+  position:fixed;z-index:21;pointer-events:none;transform:translate(-50%,-160%);
+  font-size:12px;font-weight:700;padding:4px 9px;border-radius:8px;
+  background:rgba(7,11,20,.88);border:1px solid var(--line);opacity:0;transition:opacity .12s;
+}
+
+/* ---------- 詳細パネル ---------- */
+#detail{
+  position:fixed;right:14px;top:76px;bottom:14px;width:min(430px,44vw);z-index:28;
+  display:flex;flex-direction:column;overflow:hidden;
+  transform:translateX(calc(100% + 30px));transition:transform .34s cubic-bezier(.2,.85,.25,1);
+}
+#detail.open{transform:none}
+#dHead{padding:14px 16px 12px;border-bottom:1px solid var(--line);position:relative;flex:none}
+#dClose{position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:50%;
+  background:rgba(255,255,255,.08);border:1px solid var(--line);font-size:16px;line-height:1;display:grid;place-items:center}
+#dCountry{font-size:12px;color:var(--accent2);font-weight:800;letter-spacing:.1em}
+#dDish{font-size:22px;font-weight:900;margin:4px 0 2px;line-height:1.25;padding-right:34px}
+#dLocal{font-size:11.5px;color:var(--dim);letter-spacing:.04em}
+/* 同じ国の中の料理を切りかえるタブ */
+#dTabs{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+#dTabs.hide{display:none}
+#dTabs button{
+  font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:99px;
+  background:rgba(255,255,255,.07);border:1px solid var(--line);
+}
+#dTabs button.on{background:var(--accent2);border-color:var(--accent2);color:#06201d}
+/* 料理が生まれた土地 */
+#dPlace{
+  display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:10px 12px;
+  border-radius:12px;background:rgba(90,209,198,.09);border:1px solid rgba(90,209,198,.28);
+}
+#dPlace .alt{font-size:19px;font-weight:900;color:var(--accent2);line-height:1;white-space:nowrap}
+#dPlace .alt small{font-size:10px;font-weight:700;margin-left:1px}
+#dPlace .pl{min-width:0}
+#dPlace .pl b{display:block;font-size:12.5px;font-weight:700;margin-bottom:3px}
+#dPlace .pl span{font-size:10.5px;color:var(--dim)}
+.terr{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.terr span{
+  font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:99px;
+  background:rgba(90,209,198,.16);border:1px solid rgba(90,209,198,.4);color:#bdf5ef;
+}
+#dBody{overflow-y:auto;padding:0 16px 20px;-webkit-overflow-scrolling:touch}
+#dArt{margin:14px 0 4px;border-radius:14px;overflow:hidden;background:#141b2a;border:1px solid var(--line)}
+#dArt svg{display:block;width:100%;height:auto}
+/* 料理の写真（イラストと同じ16:10の枠） */
+figure.photo{margin:0;position:relative;background:#0b1018}
+figure.photo img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover}
+figure.photo figcaption{
+  position:absolute;right:0;bottom:0;max-width:100%;
+  font-size:9.5px;line-height:1.5;color:rgba(255,255,255,.88);background:rgba(0,0,0,.58);
+  padding:2px 7px;border-top-left-radius:8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+figure.photo figcaption a{color:inherit;text-decoration:none}
+#dCaption{font-size:11px;color:var(--dim);margin:6px 2px 16px;line-height:1.6}
+
+.sec{margin-bottom:18px}
+.sec h3{
+  display:flex;align-items:center;gap:7px;margin:0 0 8px;font-size:12px;
+  letter-spacing:.1em;color:var(--accent);font-weight:800;
+}
+.sec h3::after{content:"";flex:1;height:1px;background:var(--line)}
+.sec p{margin:0 0 8px;font-size:13.5px;line-height:1.85;color:#dbe3ef}
+.sec p:last-child{margin-bottom:0}
+.why{display:flex;gap:10px;margin-bottom:12px}
+.why .ic{font-size:19px;line-height:1.3;flex:none;width:26px;text-align:center}
+.why b{display:block;font-size:11.5px;color:var(--accent2);letter-spacing:.06em;margin-bottom:2px}
+.why p{font-size:13px;line-height:1.8;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:11.5px;padding:4px 10px;border-radius:99px;background:rgba(255,255,255,.07);border:1px solid var(--line)}
+.geo{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:12.5px;line-height:1.7;margin:0}
+.geo dt{color:var(--dim);font-weight:700;white-space:nowrap}
+.geo dd{margin:0}
+ol.q{margin:0;padding-left:1.15em}
+ol.q li{font-size:13px;line-height:1.8;margin-bottom:7px;color:#dbe3ef}
+ol.q li::marker{color:var(--accent);font-weight:800}
+#dFly{width:100%;margin-top:4px;padding:10px;border-radius:12px;background:rgba(90,209,198,.14);
+  border:1px solid rgba(90,209,198,.4);font-size:12.5px;font-weight:700;color:#bdf5ef}
+
+/* ---------- クイズ ---------- */
+#quiz{
+  position:fixed;left:50%;top:70px;z-index:29;
+  width:min(390px,92vw);padding:16px;text-align:center;
+  max-height:calc(100vh - 88px);overflow-y:auto;-webkit-overflow-scrolling:touch;
+  transform:translate(-50%,-180%);transition:transform .34s cubic-bezier(.2,.85,.25,1);
+}
+#quiz.open{transform:translate(-50%,0)}
+#qStep{font-size:11px;color:var(--accent2);font-weight:800;letter-spacing:.1em}
+#qArt{margin:8px 0;border-radius:12px;overflow:hidden;background:#141b2a}
+#qArt svg{display:block;width:100%;height:auto}
+#qDish{font-size:20px;font-weight:900;margin:8px 0 2px;line-height:1.3}
+#qLocal{font-size:10.5px;color:var(--dim);letter-spacing:.04em;margin-bottom:8px}
+#qTitle{font-size:13px;font-weight:800;margin:2px 0 6px;color:var(--accent)}
+#qHint{font-size:11.5px;color:var(--dim);line-height:1.6}
+#qForm{display:flex;gap:6px;margin-top:11px}
+#qForm.done{opacity:.35;pointer-events:none}
+#qInput{
+  flex:1;min-width:0;background:rgba(255,255,255,.08);border:1px solid var(--line);
+  border-radius:10px;padding:9px 11px;color:var(--text);font-size:15px;outline:none;
+}
+#qInput:focus{border-color:var(--accent2);background:rgba(90,209,198,.08)}
+#qInput::placeholder{color:#6f809a;font-size:13px}
+#qForm button{flex:none}
+#qNote{font-size:10.5px;color:var(--dim);margin-top:7px;line-height:1.6}
+#qMiss{font-size:11.5px;color:var(--ng);font-weight:700;margin-top:7px;min-height:1px}
+#qResult{margin-top:10px;font-size:13px;line-height:1.7;display:none}
+#qResult.show{display:block}
+#qResult b{font-size:15px}
+#qActions{display:flex;gap:8px;justify-content:center;margin-top:12px}
+
+/* ---------- ローディング ---------- */
+#loading{
+  position:fixed;inset:0;z-index:60;display:grid;place-items:center;
+  background:var(--bg);transition:opacity .5s;
+}
+#loading.done{opacity:0;pointer-events:none}
+#loading .box{text-align:center;padding:20px}
+#loading h2{font-size:18px;font-weight:800;margin:0 0 6px;letter-spacing:.05em}
+#loading p{font-size:12px;color:var(--dim);margin:0 0 16px}
+#bar{width:220px;height:3px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:0 auto}
+#barFill{height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .3s}
+#loadNote{font-size:10.5px;color:#6f809a;margin-top:14px;line-height:1.7;max-width:300px}
+
+/* ---------- 使い方 ---------- */
+#help{
+  position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:20px;
+  background:rgba(4,7,13,.72);backdrop-filter:blur(6px);
+}
+#help.open{display:grid}
+#helpCard{width:min(520px,100%);max-height:84vh;overflow-y:auto;padding:22px}
+#helpCard h2{margin:0 0 4px;font-size:19px;font-weight:900}
+#helpCard .sub{font-size:12px;color:var(--dim);margin-bottom:16px}
+#helpCard h4{margin:16px 0 6px;font-size:12px;letter-spacing:.09em;color:var(--accent)}
+#helpCard p,#helpCard li{font-size:13px;line-height:1.85;color:#dbe3ef;margin:0 0 6px}
+#helpCard ul{margin:0;padding-left:1.2em}
+
+/* ---------- タブレット / スマホ ---------- */
+@media (max-width:900px){
+  #leftRail{top:64px;width:210px}
+  #listPanel{max-height:56vh}
+  #detail{
+    left:0;right:0;top:auto;bottom:0;width:100%;max-height:74vh;
+    border-radius:20px 20px 0 0;
+    transform:translateY(calc(100% + 30px));
+  }
+  #detail.open{transform:none}
+  #brand span{display:none}
+  #quiz{top:60px}
+}
+@media (max-width:560px){
+  #leftRail{left:8px;right:8px;width:auto}
+  #listPanel{max-height:48vh}
+  #brand h1{font-size:15px}
+  .btn{padding:7px 11px;font-size:12px}
+}
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="gl"></canvas></div>
+<div id="pins"></div>
+<div id="hoverName"></div>
+
+<header id="topbar">
+  <div id="brand">
+    <h1>世界の郷土料理と地球</h1>
+    <span>地形・気候・歴史から料理のわけを読みとく</span>
+  </div>
+  <div id="topActions">
+    <button class="btn on" id="btnList">国一覧</button>
+    <button class="btn" id="btnMode">高さの色分け</button>
+    <button class="btn" id="btnQuiz">料理クイズ</button>
+    <button class="btn ghost" id="btnHelp">使い方</button>
+  </div>
+</header>
+
+<div id="leftRail">
+<aside id="listPanel" class="glass">
+  <div id="listHead">
+    <div id="modeTabs">
+      <button class="on" data-mode="country">国から</button>
+      <button data-mode="terrain">地形からくらべる</button>
+    </div>
+    <input id="search" type="search" placeholder="国・料理名でさがす" autocomplete="off">
+  </div>
+  <div id="tagWrap" hidden></div>
+  <div id="tagDesc" hidden></div>
+  <div id="listBody"></div>
+</aside>
+
+<section id="controls" class="glass">
+  <div class="row"><span class="lbl">地形の強調</span><span id="exagVal">×25</span></div>
+  <div class="row"><input id="exag" type="range" min="0" max="70" step="1" value="25"></div>
+  <div class="row toggles">
+    <button class="tg on" data-layer="rivers">川</button>
+    <button class="tg on" data-layer="borders">国境</button>
+    <button class="tg on" data-layer="labels">国名</button>
+    <button class="tg" data-layer="spin">自動回転</button>
+  </div>
+  <div id="legend">
+    <span class="lbl">標高のめやす（実際の高さ）</span>
+    <div id="ramp"></div>
+    <div id="rampLbl"><span>0</span><span>2,200</span><span>4,400</span><span>6,600</span><span>8,800m</span></div>
+  </div>
+</section>
+</div>
+
+<aside id="detail" class="glass">
+  <div id="dHead">
+    <button id="dClose" aria-label="閉じる">×</button>
+    <div id="dCountry"></div>
+    <div id="dDish"></div>
+    <div id="dLocal"></div>
+    <div id="dTabs" class="hide"></div>
+  </div>
+  <div id="dBody"></div>
+</aside>
+
+<section id="quiz" class="glass">
+  <div id="qStep"></div>
+  <div id="qArt"></div>
+  <div id="qDish"></div>
+  <div id="qLocal"></div>
+  <div id="qTitle"></div>
+  <div id="qHint"></div>
+  <form id="qForm" autocomplete="off">
+    <input id="qInput" type="text" placeholder="国名を入力（例：日本）"
+           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+           enterkeyhint="done" aria-label="国名を入力">
+    <button class="btn on" type="submit">答える</button>
+  </form>
+  <div id="qMiss"></div>
+  <div id="qNote">地球儀のオレンジの点をタップしても答えられます</div>
+  <div id="qResult"></div>
+  <div id="qActions">
+    <button class="btn" id="qNext">次の問題</button>
+    <button class="btn ghost" id="qEnd">やめる</button>
+  </div>
+</section>
+
+<div id="help"><div id="helpCard" class="glass">
+  <h2>使い方</h2>
+  <div class="sub">世界の郷土料理と地球 — 社会科・総合／小学校高学年〜</div>
+  <h4>地球儀をうごかす</h4>
+  <ul>
+    <li>ドラッグ（指でなぞる）＝回転／ホイール・ピンチ＝ズーム</li>
+    <li>オレンジの点をタップすると、その国の郷土料理がひらきます</li>
+  </ul>
+  <h4>地形を読む</h4>
+  <ul>
+    <li>「地形の強調」のつまみを動かすと、山の高さが何倍にも強調されます。×0で本当の地球の形（ほぼまん丸）になります</li>
+    <li>「高さの色分け」にすると標高が色でわかります（緑＝低い／茶＝高い／白＝万年雪）</li>
+    <li>水色の線は世界の大きな川です。川ぞいに文明と料理が育ったことを確かめられます</li>
+  </ul>
+  <h4>同じ国の中でくらべる</h4>
+  <ul>
+    <li>料理パネルの上のタブで、同じ国のちがう土地の料理に切りかえられます（例：日本＝寿司・ほうとう・石狩鍋）</li>
+    <li>料理ごとに「生まれた土地の名前・標高・地形」が出ます。海ぞいの5mと山の中の270mをくらべてみましょう</li>
+  </ul>
+  <h4>地形からくらべる</h4>
+  <ul>
+    <li>左のパネルの「地形からくらべる」を押すと、88品が<b>標高の高い順</b>にならびます</li>
+    <li>「島・島国」「大きな川のそば」「高地・山」などのタグをえらぶと、その土地で生まれた料理だけになり、地球儀のピンもその料理だけになります</li>
+    <li>ペルーは同じ国に標高10mのセビーチェと3,850mのチューニョがあります。保存の方法がどう変わるか見くらべてみましょう</li>
+  </ul>
+  <h4>授業での使い方の例</h4>
+  <ul>
+    <li>①料理クイズで「どこの料理だろう？」と予想 → ②地球儀で位置と地形をたしかめる → ③「なぜこの料理か」を3つの視点で読む</li>
+    <li>クイズは料理名も出ます。答えは<b>国名を入力</b>するか、地球儀の点をタップします。ひらがな・カタカナ・漢字・英語のどれでもOK（「にほん」「ニホン」「日本」「Japan」）</li>
+    <li>「海に面した国」「山にかこまれた国」「かわいた国」でグループ分けして、料理の共通点をさがす</li>
+    <li>パネル下の「調べてみよう」を自由進度学習の課題カードとして使う</li>
+  </ul>
+  <h4>ことわり</h4>
+  <p>料理の写真は、ウィキメディア・コモンズで公開されている自由ライセンスの写真です。撮影者とライセンスは各写真の右下と<a href="credits.html" target="_blank" rel="noopener" style="color:#5ad1c6">写真の出典一覧</a>にあります。写真が読みこめないときは、このアプリ用に描いたイラストが表示されます。</p>
+  <p>郷土料理には地域差・家庭差があり、ここで紹介するのは代表的な一例です。</p>
+  <div style="margin-top:16px"><button class="btn on" id="helpClose">とじる</button></div>
+</div></div>
+
+<div id="loading"><div class="box">
+  <h2>世界の郷土料理と地球</h2>
+  <p>地球のデータを読みこんでいます…</p>
+  <div id="bar"><div id="barFill"></div></div>
+  <div id="loadNote">はじめて開くときはインターネット接続が必要です（地形データの読みこみ）。</div>
+</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="data.js"></script>
+<script src="dishes.js"></script>
+<script src="photos.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
